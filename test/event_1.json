@@ -1,0 +1,20 @@
+{
+    "Records": [
+        {
+            "messageId": "some_message_id",
+            "receiptHandle": "some_receipt_handle",
+            "body": "{\n  \"Type\" : \"Notification\",\n  \"MessageId\" : \"id\",\n  \"TopicArn\" : \"arn:aws:sns:us-east-2:ACCOUNT:OMAHA\",\n  \"Subject\" : \"Amazon S3 Notification\",\n  \"Message\" : \"{\\\"Records\\\":[{\\\"eventVersion\\\":\\\"2.1\\\",\\\"eventSource\\\":\\\"aws:s3\\\",\\\"awsRegion\\\":\\\"us-east-2\\\",\\\"eventTime\\\":\\\"time\\\",\\\"eventName\\\":\\\"ObjectCreated:Put\\\",\\\"userIdentity\\\":{\\\"principalId\\\":\\\"some_principal_id\\\"},\\\"requestParameters\\\":{\\\"sourceIPAddress\\\":\\\"ip\\\"},\\\"responseElements\\\":{\\\"x-amz-request-id\\\":\\\"request\\\",\\\"x-amz-id-2\\\":\\\"blah\\\"},\\\"s3\\\":{\\\"s3SchemaVersion\\\":\\\"1.0\\\",\\\"configurationId\\\":\\\"id\\\",\\\"bucket\\\":{\\\"name\\\":\\\"CHANGE_ME\\\",\\\"ownerIdentity\\\":{\\\"principalId\\\":\\\"id\\\"},\\\"arn\\\":\\\"arn\\\"},\\\"object\\\":{\\\"key\\\":\\\"test/sample_adt.hl7\\\",\\\"size\\\":836,\\\"eTag\\\":\\\"etag\\\",\\\"sequencer\\\":\\\"seq\\\"}}}]}\",\n  \"Timestamp\" : \"2022-11-25T01:09:46.110Z\",\n  \"SignatureVersion\" : \"1\",\n  \"Signature\" : \"sig\",\n  \"SigningCertURL\" : \"https://sns.us-east-2.amazonaws.com/SimpleNotificationService-56e67fcb41f6fec09b0196692625d385.pem\",\n  \"UnsubscribeURL\" : \"url\"\n}",
+            "attributes": {
+                "ApproximateReceiveCount": "1",
+                "SentTimestamp": "timestamp",
+                "SenderId": "NEBRASKA",
+                "ApproximateFirstReceiveTimestamp": "timestamp"
+            },
+            "messageAttributes": {},
+            "md5OfBody": "md5",
+            "eventSource": "aws:sqs",
+            "eventSourceARN": "arn:aws:sqs:us-east-2:ACCOUNT:OMAHA",
+            "awsRegion": "us-east-2"
+        }
+    ]
+}
