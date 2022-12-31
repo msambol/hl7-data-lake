@@ -1,6 +1,6 @@
 # hl7-data-lake
 
-Building an HL7 data lake on AWS as described [here]().
+Building an HL7 data lake on AWS as described [here](https://www.michaelsambol.com/blogs/building_an_hl7_date_lake.html).
 
 ## Architecture
 
