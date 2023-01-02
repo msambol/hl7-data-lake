@@ -24,6 +24,7 @@ Deploy stack:
 ```
 // dev
 cdk deploy --context environment=dev Hl7DataLakeStack-dev
+cdk deploy --context environment=dev Hl7ObservabilityStack-dev
 
 // add additional environments if desired
 ```

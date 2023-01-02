@@ -2,6 +2,7 @@
 import 'source-map-support/register'
 import { App } from 'aws-cdk-lib'
 import { Hl7DataLakeStack } from '../lib/hl7-data-lake-stack'
+import { Hl7ObservabilityStack } from '../lib/hl7-observability-stack'
 
 const app = new App()
 
@@ -16,5 +17,10 @@ const regionalEnv = {env: {region: envContext.region, account: envContext.accoun
 new Hl7DataLakeStack(app, `Hl7DataLakeStack-${environment}`, {
   environment,
   hl7LayerArn: envContext['hl7LayerArn'],
+  ...regionalEnv
+})
+
+new Hl7ObservabilityStack(app, `Hl7ObservabilityStack-${environment}`, {
+  environment,
   ...regionalEnv
 })

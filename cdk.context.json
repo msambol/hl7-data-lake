@@ -1,7 +1,7 @@
 {
     "dev": {
-        "account": "CHANGE_ME",
+        "account": "453401560325",
         "region": "us-east-2",
-        "hl7LayerArn": "arn:aws:lambda:us-east-2:CHANGE_ME:layer:hl7:3"
+        "hl7LayerArn": "arn:aws:lambda:us-east-2:453401560325:layer:hl7:3"
     }
 }
