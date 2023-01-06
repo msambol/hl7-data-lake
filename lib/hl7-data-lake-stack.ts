@@ -19,6 +19,7 @@ import { columns, partitions } from "../schema/schema"
 export interface Hl7DatalakeStackProps extends StackProps {
     readonly environment: string
     readonly hl7LayerArn: string
+    readonly otelLayerArn: string
 }
 
 export class Hl7DataLakeStack extends Stack {
@@ -28,6 +29,7 @@ export class Hl7DataLakeStack extends Stack {
         const namingPrefix = 'hl7-data-lake'
         const resultPrefixParquet = 'processed_parquet'
         const hl7Layer = lambda.LayerVersion.fromLayerVersionArn(this, 'Hl7DataLakeHl7Layer', props.hl7LayerArn)
+        const otelLayer = lambda.LayerVersion.fromLayerVersionArn(this, 'OtelLayer', props.otelLayerArn)
 
         const ingestionTopic = new sns.Topic(this, 'Hl7DataLakeIngestionTopic', {
             topicName: `${namingPrefix}-ingestion-${props.environment}`,
@@ -156,26 +158,39 @@ export class Hl7DataLakeStack extends Stack {
         const hl7Lambda = new lambdaPython.PythonFunction(this, 'Hl7DataLakeHl7ParserLambda', {
             functionName: `${namingPrefix}-parser-${props.environment}`,
             description: 'Polls SQS, parses HL7, and writes JSON to Firehose & S3',
-            entry: path.join(__dirname, '..', 'lambdas'), 
-            runtime: lambda.Runtime.PYTHON_3_9, 
+            entry: path.join(__dirname, '..', 'lambdas'),
+            runtime: lambda.Runtime.PYTHON_3_9,
             index: 'hl7_parser.py',
             handler: 'handler',
             timeout: Duration.minutes(1),
             memorySize: 256,
             retryAttempts: 0,
             reservedConcurrentExecutions: 150,
+            tracing: lambda.Tracing.ACTIVE,
             environment: {
                 ENVIRONMENT: props.environment,
                 DATA_BUCKET: dataBucket.bucketName,
                 STREAM_NAME: deliveryStream.deliveryStreamName || '',
+                OPENTELEMETRY_COLLECTOR_CONFIG_FILE: '/var/task/collector.yaml',
+                AWS_LAMBDA_EXEC_WRAPPER: '/opt/otel-instrument',
             },
-            layers: [hl7Layer],
+            layers: [hl7Layer, otelLayer],
         })
         dataBucket.grantReadWrite(hl7Lambda)
         hl7Lambda.role?.addToPrincipalPolicy(new iam.PolicyStatement({
             effect: iam.Effect.ALLOW,
             resources: [`arn:aws:firehose:${this.region}:${this.account}:deliverystream/${deliveryStream.deliveryStreamName}`],
             actions: ['firehose:PutRecord*'],
+        }))
+        hl7Lambda.role?.addToPrincipalPolicy(new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          resources: ['*'],
+          actions: [
+            'aps:RemoteWrite',
+            'aps:GetSeries',
+            'aps:GetLabels',
+            'aps:GetMetricMetadata',
+          ]
         }))
         hl7Lambda.addEventSource(new lambdaEventSources.SqsEventSource(dataQueue, {
             batchSize: 1,

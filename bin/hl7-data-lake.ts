@@ -17,6 +17,7 @@ const regionalEnv = {env: {region: envContext.region, account: envContext.accoun
 new Hl7DataLakeStack(app, `Hl7DataLakeStack-${environment}`, {
   environment,
   hl7LayerArn: envContext['hl7LayerArn'],
+  otelLayerArn: envContext['otelLayerArn'],
   ...regionalEnv
 })
 

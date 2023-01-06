@@ -2,6 +2,7 @@
     "dev": {
         "account": "453401560325",
         "region": "us-east-2",
-        "hl7LayerArn": "arn:aws:lambda:us-east-2:453401560325:layer:hl7:3"
+        "hl7LayerArn": "arn:aws:lambda:us-east-2:453401560325:layer:hl7:3",
+        "otelLayerArn": "arn:aws:lambda:us-east-2:901920570463:layer:aws-otel-python-amd64-ver-1-15-0:1"
     }
 }
