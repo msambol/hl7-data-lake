@@ -1,5 +1,6 @@
 import { Stack, StackProps, Duration, RemovalPolicy } from 'aws-cdk-lib'
 import { Construct } from 'constructs'
+import { aws_cloudwatch as cw } from 'aws-cdk-lib'
 import { aws_iam as iam } from 'aws-cdk-lib'
 import { aws_lambda as lambda } from 'aws-cdk-lib'
 import { aws_logs as logs } from 'aws-cdk-lib'
@@ -19,16 +20,19 @@ import { columns, partitions } from "../schema/schema"
 export interface Hl7DatalakeStackProps extends StackProps {
     readonly environment: string
     readonly hl7LayerArn: string
+    readonly embeddedMetricsLayerArn: string
     readonly otelLayerArn: string
 }
 
 export class Hl7DataLakeStack extends Stack {
     constructor(scope: Construct, id: string, props: Hl7DatalakeStackProps) {
+
         super(scope, id, props)
 
         const namingPrefix = 'hl7-data-lake'
         const resultPrefixParquet = 'processed_parquet'
         const hl7Layer = lambda.LayerVersion.fromLayerVersionArn(this, 'Hl7DataLakeHl7Layer', props.hl7LayerArn)
+        const embeddedMetricsLayer = lambda.LayerVersion.fromLayerVersionArn(this, 'EmbeddedMetricsLayer', props.embeddedMetricsLayerArn)
         const otelLayer = lambda.LayerVersion.fromLayerVersionArn(this, 'OtelLayer', props.otelLayerArn)
 
         const ingestionTopic = new sns.Topic(this, 'Hl7DataLakeIngestionTopic', {
@@ -80,7 +84,7 @@ export class Hl7DataLakeStack extends Stack {
         })
 
         const logGroup = new logs.LogGroup(this, 'Hl7DataLakeLogGroup', {
-            logGroupName: `${namingPrefix}-firehose-logs-${props.environment}`,
+            logGroupName: `/aws/firehose/${namingPrefix}-logs-${props.environment}`,
             removalPolicy: RemovalPolicy.DESTROY,
         })
         const logStream = new logs.LogStream(this, 'Hl7DataLakeLogStream', {
@@ -173,8 +177,9 @@ export class Hl7DataLakeStack extends Stack {
                 STREAM_NAME: deliveryStream.deliveryStreamName || '',
                 OPENTELEMETRY_COLLECTOR_CONFIG_FILE: '/var/task/collector.yaml',
                 AWS_LAMBDA_EXEC_WRAPPER: '/opt/otel-instrument',
+                NAMING_PREFIX: namingPrefix,
             },
-            layers: [hl7Layer, otelLayer],
+            layers: [hl7Layer, embeddedMetricsLayer, otelLayer],
         })
         dataBucket.grantReadWrite(hl7Lambda)
         hl7Lambda.role?.addToPrincipalPolicy(new iam.PolicyStatement({
@@ -195,5 +200,40 @@ export class Hl7DataLakeStack extends Stack {
         hl7Lambda.addEventSource(new lambdaEventSources.SqsEventSource(dataQueue, {
             batchSize: 1,
         }))
+
+        //
+        // OBSERVABILITY 
+        //
+        // Example 1: Using CloudWatch Logs metric filters
+        const metricOneSuccess = 'Example_1_Success'
+        new cw.Metric({
+          namespace: namingPrefix,
+          metricName: metricOneSuccess,
+        })
+        new logs.MetricFilter(this, 'MetricsExample1Success', {
+          logGroup: hl7Lambda.logGroup,
+          metricNamespace: namingPrefix,
+          metricName: metricOneSuccess,
+          filterPattern: logs.FilterPattern.stringValue('$.result', '=', 'SUCCESS'),
+          metricValue: '1',
+          dimensions: {
+            'LambdaFunctionName': '$.lambdaFunctionName'
+          }
+        })
+        const metricOneFailure = 'Example_1_Failure'
+        new cw.Metric({
+          namespace: namingPrefix,
+          metricName: metricOneFailure,
+        })
+        new logs.MetricFilter(this, 'MetricsExample1Failure', {
+          logGroup: hl7Lambda.logGroup,
+          metricNamespace: namingPrefix,
+          metricName: metricOneFailure,
+          filterPattern: logs.FilterPattern.stringValue('$.result', '=', 'FAILED'),
+          metricValue: '1',
+          dimensions: {
+            'LambdaFunctionName': '$.lambdaFunctionName'
+          }
+        })
     }
 }

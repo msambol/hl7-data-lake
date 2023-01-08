@@ -8,6 +8,18 @@ Building an HL7 data lake on AWS as described [here](https://www.michaelsambol.c
 
 ## Deploy 
 
+Software versions:
+```
+❯ node --version
+v18.6.0
+
+❯ python --version
+Python 3.9.6
+
+❯ cdk --version
+2.55.0
+```
+
 Install dependencies:
 ```
 npm install
@@ -18,6 +30,11 @@ You need Docker installed and running to package and deploy the Lambda function.
 Create a Lambda layer with the [HL7 Python package](https://pypi.org/project/hl7/) and drop the ARN in `cdk.context.json`. The zip is included in this repo.
 ```
 aws lambda publish-layer-version --layer-name hl7 --zip-file fileb://layers/hl7.zip --compatible-runtimes python3.9 --description "Parsing messages of Health Level 7 (HL7) version 2.x into Python objects"
+```
+
+Create a Lambda layer with the [AWS Embedded Metrics package](https://pypi.org/project/aws-embedded-metrics/) and drop the ARN in `cdk.context.json`. The zip is included in this repo.
+```
+aws lambda publish-layer-version --layer-name aws_embedded_metrics --zip-file fileb://layers/aws_embedded_metrics.zip --compatible-runtimes python3.9 --description "Amazon CloudWatch Embedded Metric Format Client Library"
 ```
 
 Deploy stack:
@@ -44,5 +61,5 @@ python test_hl7_parser.py
 You can also drop files in the S3 bucket created by the CDK within the `raw/` prefix, which triggers the process in AWS:
 
 ```
-aws s3 cp test/sample_adt.hl7 s3://<BUCKET>/raw/sample_adt.hl7
+aws s3 cp test/sample_adt.hl7 s3://hl7-data-lake-dev-453401560325/raw/sample_adt.hl7
 ```

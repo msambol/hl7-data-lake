@@ -16,7 +16,7 @@ export class Hl7ObservabilityStack extends Stack {
         const namingPrefix = 'hl7-observability'
 
         const logGroup = new logs.LogGroup(this, 'Hl7ObservabilityLogGroup', {
-            logGroupName: `${namingPrefix}-prometheus-${props.environment}`,
+            logGroupName: `/aws/prometheus/${namingPrefix}-${props.environment}`,
             removalPolicy: RemovalPolicy.DESTROY,
         })
 
