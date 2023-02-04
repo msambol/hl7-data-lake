@@ -22,6 +22,7 @@ NAMING_PREFIX = os.environ.get('NAMING_PREFIX', '')
 
 # metrics
 SUCCESS = '[SUCCESS] HL7 message processed'
+FAILED = '[FAILED] Failure during HL7 message processing'
 
 def parse_hl7(hl7_body, filename):
     try:
@@ -213,6 +214,9 @@ def handler(event, context, metrics):
             message = json.loads(body.get('Message', {}))
             
             for record in message.get('Records', []):
+                # track messages processed so we can count error rate
+                metrics.put_metric('Total_HL7_Messages_Processed', 1, 'Count')
+
                 bucket = record.get('s3').get('bucket').get('name')
                 key = record.get('s3').get('object').get('key')
                 filename = key.split("/")[-1]
@@ -232,6 +236,29 @@ def handler(event, context, metrics):
                 source_facility = parsed_hl7['partitions']['source_facility'] = parsed_hl7['source_facility']
                 transaction_date = parsed_hl7['partitions']['transaction_date'] = partition_date(parsed_hl7['transaction_date'])
                 print(f'Partitions: {json.dumps(parsed_hl7["partitions"])}')
+
+
+                #################
+                # OBSERVABILITY #
+                # -- failure -- #
+                #################
+
+                # force a failure if first name == "NONAME"
+                if parsed_hl7['first_name'] == "NONAME":
+                    # Example 1: Using CloudWatch Logs metric filters
+                    failed = {
+                        'result': 'FAILED',
+                        'message': FAILED,
+                        'lambdaFunctionName': context.function_name,
+                    }
+                    print(json.dumps(failed))
+
+                    # Example 2: Embedded metric format
+                    metrics.set_namespace(NAMING_PREFIX)
+                    metrics.set_dimensions({'LambdaFunctionName': context.function_name})
+                    metrics.put_metric('Example_2_Failure', 1, 'Count')
+
+                    continue
 
                 try:
                     # need parsed_hl7['partitions'] for dynamic partitioning in Firehose
@@ -276,6 +303,7 @@ def handler(event, context, metrics):
 
                 #################
                 # OBSERVABILITY #
+                # -- success -- #
                 #################
 
                 # Example 1: Using CloudWatch Logs metric filters

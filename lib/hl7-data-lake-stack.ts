@@ -16,6 +16,8 @@ import * as glue from '@aws-cdk/aws-glue-alpha'
 import * as path from 'path'
 
 import { columns, partitions } from "../schema/schema"
+import { CloudWatchEncryptionMode } from '@aws-cdk/aws-glue-alpha'
+import { Unit } from 'aws-cdk-lib/aws-cloudwatch'
 
 export interface Hl7DatalakeStackProps extends StackProps {
     readonly environment: string
@@ -206,9 +208,15 @@ export class Hl7DataLakeStack extends Stack {
         //
         // Example 1: Using CloudWatch Logs metric filters
         const metricOneSuccess = 'Example_1_Success'
-        new cw.Metric({
+        const metricSucess = new cw.Metric({
           namespace: namingPrefix,
           metricName: metricOneSuccess,
+          period: Duration.minutes(5),
+          statistic: 'sum',
+          unit: Unit.COUNT,
+          dimensionsMap: {
+            'LambdaFunctionName': hl7Lambda.functionName
+          }
         })
         new logs.MetricFilter(this, 'MetricsExample1Success', {
           logGroup: hl7Lambda.logGroup,
@@ -221,9 +229,15 @@ export class Hl7DataLakeStack extends Stack {
           }
         })
         const metricOneFailure = 'Example_1_Failure'
-        new cw.Metric({
+        const metricFailures = new cw.Metric({
           namespace: namingPrefix,
           metricName: metricOneFailure,
+          period: Duration.minutes(5),
+          statistic: 'sum',
+          unit: Unit.COUNT,
+          dimensionsMap: {
+            'LambdaFunctionName': hl7Lambda.functionName
+          }
         })
         new logs.MetricFilter(this, 'MetricsExample1Failure', {
           logGroup: hl7Lambda.logGroup,
@@ -234,6 +248,39 @@ export class Hl7DataLakeStack extends Stack {
           dimensions: {
             'LambdaFunctionName': '$.lambdaFunctionName'
           }
+        })
+
+        const metricTotalMessages = 'Total_HL7_Messages_Processed'
+        const metricTotal = new cw.Metric({
+          namespace: namingPrefix,
+          metricName: metricTotalMessages,
+          period: Duration.minutes(5),
+          statistic: 'sum',
+          unit: Unit.COUNT,
+          dimensionsMap: {
+            'LambdaFunctionName': hl7Lambda.functionName
+          }
+        })
+
+        const metricFailurePercentage = new cw.MathExpression({
+          label: 'HL7_Processing_Failure_Percentage',
+          period: Duration.minutes(5),
+          expression: "100 * (m1/m2)",
+          usingMetrics: {
+            m1: metricFailures,
+            m2: metricTotal,
+          }
+        })
+
+        new cw.Alarm(this, "Hl7FailureAlarm", {
+          metric: metricFailurePercentage,
+          alarmName: "HL7 Failure Percentage",
+          alarmDescription: "HL7 Failure Percentage",
+          datapointsToAlarm: 1,
+          evaluationPeriods: 1,
+          threshold: 5,
+          comparisonOperator: cw.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+          treatMissingData: cw.TreatMissingData.IGNORE,
         })
     }
 }
