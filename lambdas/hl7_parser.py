@@ -3,7 +3,8 @@ import datetime
 import hl7
 import json
 import os
-#from opentelemetry import _metrics
+from opentelemetry import metrics as ot_metrics
+from opentelemetry.metrics import get_meter_provider
 from aws_embedded_metrics import metric_scope
 
 from ParsedHL7 import *
@@ -23,6 +24,7 @@ NAMING_PREFIX = os.environ.get('NAMING_PREFIX', '')
 # metrics
 SUCCESS = '[SUCCESS] HL7 message processed'
 FAILED = '[FAILED] Failure during HL7 message processing'
+
 
 def parse_hl7(hl7_body, filename):
     try:
@@ -208,6 +210,11 @@ def partition_date(transaction_date):
 
 @metric_scope
 def handler(event, context, metrics):
+
+    # Embedded metrics format
+    metrics.set_namespace(NAMING_PREFIX)
+    metrics.set_dimensions({'LambdaFunctionName': context.function_name})
+
     try:
         for record in event.get('Records', []):
             body = json.loads(record.get('body', {}))
@@ -254,8 +261,6 @@ def handler(event, context, metrics):
                     print(json.dumps(failed))
 
                     # Example 2: Embedded metric format
-                    metrics.set_namespace(NAMING_PREFIX)
-                    metrics.set_dimensions({'LambdaFunctionName': context.function_name})
                     metrics.put_metric('Example_2_Failure', 1, 'Count')
 
                     continue
@@ -293,13 +298,6 @@ def handler(event, context, metrics):
                     print('Deleted HL7 file from original S3 location!')
                 except Exception as e:
                     raise Exception(f'[FAILED] Failed deleting file from original S3 location: {e}')
-                    
-                # TODO: figure this out later
-                # meter = _metrics.get_meter("hl7")
-                # counter = meter.create_counter(
-                #     name="processed_hl7", description="Hl7 message processed", unit="1",
-                # )
-                # counter.add(1)
 
                 #################
                 # OBSERVABILITY #
@@ -315,9 +313,17 @@ def handler(event, context, metrics):
                 print(json.dumps(success))
 
                 # Example 2: Embedded metric format
-                metrics.set_namespace(NAMING_PREFIX)
-                metrics.set_dimensions({'LambdaFunctionName': context.function_name})
                 metrics.put_metric('Example_2_Success', 1, 'Count')
+
+                # trying to get Prometheus to work
+                meter = ot_metrics.get_meter('hl7')
+                counter = meter.create_counter(
+                    name="invocation_count", unit="1", description="Counts the number of function invocations"
+                )
+                counter.add(1)
+                meter_provider = get_meter_provider()
+                if hasattr(meter_provider, 'force_flush'):
+                    meter_provider.force_flush(1000)
 
     except Exception as e:
         raise Exception(f'[FAILED] Failed retrieving data from record: {e}')
