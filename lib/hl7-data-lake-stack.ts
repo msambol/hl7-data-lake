@@ -197,6 +197,8 @@ export class Hl7DataLakeStack extends Stack {
             'aps:GetSeries',
             'aps:GetLabels',
             'aps:GetMetricMetadata',
+            'xray:PutTraceSegments',
+            'xray:PutTelemetryRecords',
           ]
         }))
         hl7Lambda.addEventSource(new lambdaEventSources.SqsEventSource(dataQueue, {
