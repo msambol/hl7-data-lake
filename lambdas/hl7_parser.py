@@ -29,11 +29,8 @@ FAILED = '[FAILED] Failure during HL7 message processing'
 meter = ot_metrics.get_meter(__name__)
 meter_provider = get_meter_provider()
 counter = meter.create_counter(
-    name="invocation_count", 
-    unit="1", 
-    description="Number of invocations"
+    name="invocation_count", unit="1", description="Counts the number of function invocations"
 )
-
 
 def parse_hl7(hl7_body, filename):
     try:
