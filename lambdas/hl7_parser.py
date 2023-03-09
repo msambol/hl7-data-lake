@@ -21,9 +21,18 @@ PROCESSED_JSON_PREFIX = 'processed_json'
 PROCESSED_HL7_PREFIX = 'processed_hl7'
 NAMING_PREFIX = os.environ.get('NAMING_PREFIX', '')
 
-# metrics
+# CloudWatch metrics
 SUCCESS = '[SUCCESS] HL7 message processed'
 FAILED = '[FAILED] Failure during HL7 message processing'
+
+# Prometheus 
+meter = ot_metrics.get_meter(__name__)
+meter_provider = get_meter_provider()
+counter = meter.create_counter(
+    name="invocation_count", 
+    unit="1", 
+    description="Number of invocations"
+)
 
 
 def parse_hl7(hl7_body, filename):
@@ -315,13 +324,8 @@ def handler(event, context, metrics):
                 # Example 2: Embedded metric format
                 metrics.put_metric('Example_2_Success', 1, 'Count')
 
-                # trying to get Prometheus to work
-                meter = ot_metrics.get_meter('hl7')
-                counter = meter.create_counter(
-                    name="invocation_count", unit="1", description="Counts the number of function invocations"
-                )
+                # Prometheus
                 counter.add(1)
-                meter_provider = get_meter_provider()
                 if hasattr(meter_provider, 'force_flush'):
                     meter_provider.force_flush(1000)
 
