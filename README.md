@@ -61,5 +61,5 @@ python test_hl7_parser.py
 You can also drop files in the S3 bucket created by the CDK within the `raw/` prefix, which triggers the process in AWS:
 
 ```
-aws s3 cp test/sample_adt.hl7 s3://hl7-data-lake-dev-453401560325/raw/sample_adt.hl7
+aws s3 cp test/sample_adt.hl7 s3://<BUCKET>/raw/sample_adt.hl7
 ```

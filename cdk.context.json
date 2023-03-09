@@ -1,9 +1,9 @@
 {
     "dev": {
-        "account": "453401560325",
+        "account": "CHANGE_ME",
         "region": "us-east-2",
-        "hl7LayerArn": "arn:aws:lambda:us-east-2:453401560325:layer:hl7:3",
-        "embeddedMetricsLayerArn": "arn:aws:lambda:us-east-2:453401560325:layer:aws_embedded_metrics:1",
+        "hl7LayerArn": "arn:aws:lambda:us-east-2:CHANGE_ME:layer:hl7:3",
+        "embeddedMetricsLayerArn": "arn:aws:lambda:us-east-2:CHANGE_ME:layer:aws_embedded_metrics:1",
         "otelLayerArn": "arn:aws:lambda:us-east-2:901920570463:layer:aws-otel-python-amd64-ver-1-15-0:1"
     }
 }

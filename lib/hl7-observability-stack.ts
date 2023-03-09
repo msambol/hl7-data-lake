@@ -20,9 +20,7 @@ export class Hl7ObservabilityStack extends Stack {
             removalPolicy: RemovalPolicy.DESTROY,
         })
 
-        // const prometheusWorkspace =
         new aps.CfnWorkspace(this, 'Hl7ObservabilityPrometheusWorkspace', {
-            //alertManagerDefinition: 'alertManagerDefinition',
             alias: namingPrefix,
             loggingConfiguration: {
               logGroupArn: logGroup.logGroupArn,
@@ -47,6 +45,6 @@ export class Hl7ObservabilityStack extends Stack {
           permissionType: 'SERVICE_MANAGED',
           roleArn: grafanaRole.roleArn,
           dataSources: ['PROMETHEUS'],
-        });
+        })
     }
 }

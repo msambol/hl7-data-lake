@@ -10,7 +10,7 @@ receivers:
 
 exporters:
   prometheusremotewrite:
-    endpoint: "https://aps-workspaces.us-east-2.amazonaws.com/workspaces/ws-f73e9fb6-bb0b-465d-8ce8-903b7e961ca6/api/v1/remote_write"
+    endpoint: "https://aps-workspaces.us-east-2.amazonaws.com/workspaces/<WORKSPACE_ID>/api/v1/remote_write"
     auth:
       authenticator: sigv4auth
   logging:
