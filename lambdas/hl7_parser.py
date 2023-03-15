@@ -3,6 +3,9 @@ import datetime
 import hl7
 import json
 import os
+from opentelemetry import metrics as ot_metrics
+from opentelemetry.metrics import get_meter_provider
+from aws_embedded_metrics import metric_scope
 
 from ParsedHL7 import *
 
@@ -16,7 +19,18 @@ DEBUG = False # keep False with live data, don't want PHI leak
 STREAM_NAME = os.environ.get('STREAM_NAME', '')
 PROCESSED_JSON_PREFIX = 'processed_json'
 PROCESSED_HL7_PREFIX = 'processed_hl7'
+NAMING_PREFIX = os.environ.get('NAMING_PREFIX', '')
 
+# CloudWatch metrics
+SUCCESS = '[SUCCESS] HL7 message processed'
+FAILED = '[FAILED] Failure during HL7 message processing'
+
+# Prometheus 
+meter = ot_metrics.get_meter(__name__)
+meter_provider = get_meter_provider()
+counter = meter.create_counter(
+    name="invocation_count", unit="1", description="Counts the number of function invocations"
+)
 
 def parse_hl7(hl7_body, filename):
     try:
@@ -24,7 +38,7 @@ def parse_hl7(hl7_body, filename):
         parsed_hl7 = ParsedHL7()
         h = hl7.parse(hl7_string)
     except Exception as e:
-        raise ValueError(f'Failed to parse HL7 string: {e}')
+        raise ValueError(f'[FAILED] Failed to parse HL7 string: {e}')
 
     # HL7 data is notoriously bad. I'm wrapping all the extractions in try blocks.
     # If there are certain values that you require, you can raise errors.
@@ -200,13 +214,22 @@ def partition_date(transaction_date):
         return '9999-12-31'
 
 
-def handler(event, context):
+@metric_scope
+def handler(event, context, metrics):
+
+    # Embedded metrics format
+    metrics.set_namespace(NAMING_PREFIX)
+    metrics.set_dimensions({'LambdaFunctionName': context.function_name})
+
     try:
         for record in event.get('Records', []):
             body = json.loads(record.get('body', {}))
             message = json.loads(body.get('Message', {}))
             
             for record in message.get('Records', []):
+                # track messages processed so we can count error rate
+                metrics.put_metric('Total_HL7_Messages_Processed', 1, 'Count')
+
                 bucket = record.get('s3').get('bucket').get('name')
                 key = record.get('s3').get('object').get('key')
                 filename = key.split("/")[-1]
@@ -217,7 +240,7 @@ def handler(event, context):
                     s3_object = bucket_object.Object(key)
                     s3_object_body = s3_object.get()['Body'].read().decode('utf-8')
                 except Exception as e:
-                    raise Exception(f'Failed reading object body from S3: {e}')
+                    raise Exception(f'[FAILED] Failed reading object body from S3: {e}')
 
                 parsed_hl7 = parse_hl7(s3_object_body, filename)
 
@@ -227,6 +250,27 @@ def handler(event, context):
                 transaction_date = parsed_hl7['partitions']['transaction_date'] = partition_date(parsed_hl7['transaction_date'])
                 print(f'Partitions: {json.dumps(parsed_hl7["partitions"])}')
 
+
+                #################
+                # OBSERVABILITY #
+                # -- failure -- #
+                #################
+
+                # force a failure if first name == "NONAME"
+                if parsed_hl7['first_name'] == "NONAME":
+                    # Example 1: Using CloudWatch Logs metric filters
+                    failed = {
+                        'result': 'FAILED',
+                        'message': FAILED,
+                        'lambdaFunctionName': context.function_name,
+                    }
+                    print(json.dumps(failed))
+
+                    # Example 2: Embedded metric format
+                    metrics.put_metric('Example_2_Failure', 1, 'Count')
+
+                    continue
+
                 try:
                     # need parsed_hl7['partitions'] for dynamic partitioning in Firehose
                     firehose.put_record(
@@ -235,7 +279,7 @@ def handler(event, context):
                     )
                     print('Record sent to Firehose!')
                 except Exception as e:
-                    raise Exception(f'Failed putting record into Firehose: {e}')
+                    raise Exception(f'[FAILED] Failed putting record into Firehose: {e}')
                 
                 try:
                     # don't need partitions in the stored json
@@ -244,7 +288,7 @@ def handler(event, context):
                     json_object.put(Body=json.dumps(parsed_hl7).encode('UTF-8'))
                     print('JSON file saved in processed S3 location!')
                 except Exception as e:
-                    raise Exception(f'Failed putting json into S3: {e}')
+                    raise Exception(f'[FAILED] Failed putting json into S3: {e}')
                 
                 try:
                     # move the file to a processed location
@@ -252,16 +296,37 @@ def handler(event, context):
                     s3r.Bucket(bucket).copy(copy_source, f'{PROCESSED_HL7_PREFIX}/{filename}')
                     print('Copied HL7 file to processed location!')
                 except Exception as e:
-                    raise Exception(f'Failed copying HL7 to processed S3 location: {e}')
+                    raise Exception(f'[FAILED] Failed copying HL7 to processed S3 location: {e}')
 
                 try:
                     # remove file from original S3 location (this helps gauge how many are left for processing)
                     s3r.Object(bucket, key).delete()
                     print('Deleted HL7 file from original S3 location!')
                 except Exception as e:
-                    raise Exception(f'Failed deleting file from original S3 location: {e}')
+                    raise Exception(f'[FAILED] Failed deleting file from original S3 location: {e}')
+
+                #################
+                # OBSERVABILITY #
+                # -- success -- #
+                #################
+
+                # Example 1: Using CloudWatch Logs metric filters
+                success = {
+                    'result': 'SUCCESS',
+                    'message': SUCCESS,
+                    'lambdaFunctionName': context.function_name,
+                }
+                print(json.dumps(success))
+
+                # Example 2: Embedded metric format
+                metrics.put_metric('Example_2_Success', 1, 'Count')
+
+                # Prometheus
+                counter.add(1)
+                if hasattr(meter_provider, 'force_flush'):
+                    meter_provider.force_flush(1000)
 
     except Exception as e:
-        raise Exception(f'Failed retrieving data from record: {e}')
+        raise Exception(f'[FAILED] Failed retrieving data from record: {e}')
         
     return True

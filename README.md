@@ -8,6 +8,18 @@ Building an HL7 data lake on AWS as described [here](https://www.michaelsambol.c
 
 ## Deploy 
 
+Software versions:
+```
+❯ node --version
+v18.6.0
+
+❯ python --version
+Python 3.9.6
+
+❯ cdk --version
+2.55.0
+```
+
 Install dependencies:
 ```
 npm install
@@ -20,10 +32,16 @@ Create a Lambda layer with the [HL7 Python package](https://pypi.org/project/hl7
 aws lambda publish-layer-version --layer-name hl7 --zip-file fileb://layers/hl7.zip --compatible-runtimes python3.9 --description "Parsing messages of Health Level 7 (HL7) version 2.x into Python objects"
 ```
 
+Create a Lambda layer with the [AWS Embedded Metrics package](https://pypi.org/project/aws-embedded-metrics/) and drop the ARN in `cdk.context.json`. The zip is included in this repo.
+```
+aws lambda publish-layer-version --layer-name aws_embedded_metrics --zip-file fileb://layers/aws_embedded_metrics.zip --compatible-runtimes python3.9 --description "Amazon CloudWatch Embedded Metric Format Client Library"
+```
+
 Deploy stack:
 ```
 // dev
 cdk deploy --context environment=dev Hl7DataLakeStack-dev
+cdk deploy --context environment=dev Hl7ObservabilityStack-dev
 
 // add additional environments if desired
 ```

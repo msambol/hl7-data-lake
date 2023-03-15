@@ -1,5 +1,6 @@
 import { Stack, StackProps, Duration, RemovalPolicy } from 'aws-cdk-lib'
 import { Construct } from 'constructs'
+import { aws_cloudwatch as cw } from 'aws-cdk-lib'
 import { aws_iam as iam } from 'aws-cdk-lib'
 import { aws_lambda as lambda } from 'aws-cdk-lib'
 import { aws_logs as logs } from 'aws-cdk-lib'
@@ -15,19 +16,26 @@ import * as glue from '@aws-cdk/aws-glue-alpha'
 import * as path from 'path'
 
 import { columns, partitions } from "../schema/schema"
+import { CloudWatchEncryptionMode } from '@aws-cdk/aws-glue-alpha'
+import { Unit } from 'aws-cdk-lib/aws-cloudwatch'
 
 export interface Hl7DatalakeStackProps extends StackProps {
     readonly environment: string
     readonly hl7LayerArn: string
+    readonly embeddedMetricsLayerArn: string
+    readonly otelLayerArn: string
 }
 
 export class Hl7DataLakeStack extends Stack {
     constructor(scope: Construct, id: string, props: Hl7DatalakeStackProps) {
+
         super(scope, id, props)
 
         const namingPrefix = 'hl7-data-lake'
         const resultPrefixParquet = 'processed_parquet'
         const hl7Layer = lambda.LayerVersion.fromLayerVersionArn(this, 'Hl7DataLakeHl7Layer', props.hl7LayerArn)
+        const embeddedMetricsLayer = lambda.LayerVersion.fromLayerVersionArn(this, 'EmbeddedMetricsLayer', props.embeddedMetricsLayerArn)
+        const otelLayer = lambda.LayerVersion.fromLayerVersionArn(this, 'OtelLayer', props.otelLayerArn)
 
         const ingestionTopic = new sns.Topic(this, 'Hl7DataLakeIngestionTopic', {
             topicName: `${namingPrefix}-ingestion-${props.environment}`,
@@ -78,7 +86,7 @@ export class Hl7DataLakeStack extends Stack {
         })
 
         const logGroup = new logs.LogGroup(this, 'Hl7DataLakeLogGroup', {
-            logGroupName: `${namingPrefix}-firehose-logs-${props.environment}`,
+            logGroupName: `/aws/firehose/${namingPrefix}-logs-${props.environment}`,
             removalPolicy: RemovalPolicy.DESTROY,
         })
         const logStream = new logs.LogStream(this, 'Hl7DataLakeLogStream', {
@@ -156,20 +164,24 @@ export class Hl7DataLakeStack extends Stack {
         const hl7Lambda = new lambdaPython.PythonFunction(this, 'Hl7DataLakeHl7ParserLambda', {
             functionName: `${namingPrefix}-parser-${props.environment}`,
             description: 'Polls SQS, parses HL7, and writes JSON to Firehose & S3',
-            entry: path.join(__dirname, '..', 'lambdas'), 
-            runtime: lambda.Runtime.PYTHON_3_9, 
+            entry: path.join(__dirname, '..', 'lambdas'),
+            runtime: lambda.Runtime.PYTHON_3_9,
             index: 'hl7_parser.py',
             handler: 'handler',
             timeout: Duration.minutes(1),
             memorySize: 256,
             retryAttempts: 0,
             reservedConcurrentExecutions: 150,
+            tracing: lambda.Tracing.ACTIVE,
             environment: {
                 ENVIRONMENT: props.environment,
                 DATA_BUCKET: dataBucket.bucketName,
                 STREAM_NAME: deliveryStream.deliveryStreamName || '',
+                OPENTELEMETRY_COLLECTOR_CONFIG_FILE: '/var/task/collector.yaml',
+                AWS_LAMBDA_EXEC_WRAPPER: '/opt/otel-instrument',
+                NAMING_PREFIX: namingPrefix,
             },
-            layers: [hl7Layer],
+            layers: [hl7Layer, embeddedMetricsLayer, otelLayer],
         })
         dataBucket.grantReadWrite(hl7Lambda)
         hl7Lambda.role?.addToPrincipalPolicy(new iam.PolicyStatement({
@@ -177,8 +189,100 @@ export class Hl7DataLakeStack extends Stack {
             resources: [`arn:aws:firehose:${this.region}:${this.account}:deliverystream/${deliveryStream.deliveryStreamName}`],
             actions: ['firehose:PutRecord*'],
         }))
+        hl7Lambda.role?.addToPrincipalPolicy(new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          resources: ['*'],
+          actions: [
+            'aps:RemoteWrite',
+            'aps:GetSeries',
+            'aps:GetLabels',
+            'aps:GetMetricMetadata',
+            'xray:PutTraceSegments',
+            'xray:PutTelemetryRecords',
+          ]
+        }))
         hl7Lambda.addEventSource(new lambdaEventSources.SqsEventSource(dataQueue, {
             batchSize: 1,
         }))
+
+        //
+        // OBSERVABILITY 
+        //
+        // Example 1: Using CloudWatch Logs metric filters
+        const metricOneSuccess = 'Example_1_Success'
+        const metricSucess = new cw.Metric({
+          namespace: namingPrefix,
+          metricName: metricOneSuccess,
+          period: Duration.minutes(5),
+          statistic: 'sum',
+          unit: Unit.COUNT,
+          dimensionsMap: {
+            'LambdaFunctionName': hl7Lambda.functionName
+          }
+        })
+        new logs.MetricFilter(this, 'MetricsExample1Success', {
+          logGroup: hl7Lambda.logGroup,
+          metricNamespace: namingPrefix,
+          metricName: metricOneSuccess,
+          filterPattern: logs.FilterPattern.stringValue('$.result', '=', 'SUCCESS'),
+          metricValue: '1',
+          dimensions: {
+            'LambdaFunctionName': '$.lambdaFunctionName'
+          }
+        })
+        const metricOneFailure = 'Example_1_Failure'
+        const metricFailures = new cw.Metric({
+          namespace: namingPrefix,
+          metricName: metricOneFailure,
+          period: Duration.minutes(5),
+          statistic: 'sum',
+          unit: Unit.COUNT,
+          dimensionsMap: {
+            'LambdaFunctionName': hl7Lambda.functionName
+          }
+        })
+        new logs.MetricFilter(this, 'MetricsExample1Failure', {
+          logGroup: hl7Lambda.logGroup,
+          metricNamespace: namingPrefix,
+          metricName: metricOneFailure,
+          filterPattern: logs.FilterPattern.stringValue('$.result', '=', 'FAILED'),
+          metricValue: '1',
+          dimensions: {
+            'LambdaFunctionName': '$.lambdaFunctionName'
+          }
+        })
+
+        const metricTotalMessages = 'Total_HL7_Messages_Processed'
+        const metricTotal = new cw.Metric({
+          namespace: namingPrefix,
+          metricName: metricTotalMessages,
+          period: Duration.minutes(5),
+          statistic: 'sum',
+          unit: Unit.COUNT,
+          dimensionsMap: {
+            'LambdaFunctionName': hl7Lambda.functionName
+          }
+        })
+
+        const metricFailurePercentage = new cw.MathExpression({
+          label: 'HL7_Processing_Failure_Percentage',
+          period: Duration.minutes(5),
+          expression: "100 * (m1/m2)",
+          usingMetrics: {
+            m1: metricFailures,
+            m2: metricTotal,
+          }
+        })
+
+        new cw.Alarm(this, "Hl7FailureAlarm", {
+          metric: metricFailurePercentage,
+          alarmName: "HL7 Failure Percentage",
+          alarmDescription: "HL7 Failure Percentage",
+          datapointsToAlarm: 1,
+          evaluationPeriods: 1,
+          threshold: 5,
+          comparisonOperator: cw.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+          treatMissingData: cw.TreatMissingData.IGNORE,
+        })
     }
 }
