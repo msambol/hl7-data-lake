@@ -5,7 +5,7 @@
 
 ## Architecture
 
-![HL7 Data Lake](images/HL7_Data_Lake.png)
+![HL7 Data Lake](images/Architecture_Diagram.png)
 
 ## Deploy 
 
