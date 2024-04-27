@@ -1,7 +1,7 @@
 # hl7-data-lake
 
-* [Build an HL7 Data Lake](https://medium.com/@michaelsambol/build-an-hl7-data-lake-e029e4af9c51)
-* [Observability with Amazon CloudWatch, AWS X-Ray, Prometheus, and Grafana](https://medium.com/cloud-native-daily/observability-with-amazon-cloudwatch-aws-x-ray-prometheus-and-grafana-b15708eeddbe)
+* [Build an HL7 Data Lake](https://medium.com/p/e029e4af9c51)
+* [Observability with Amazon CloudWatch, AWS X-Ray, Prometheus, and Grafana](https://medium.com/p/b15708eeddbe)
 
 ## Architecture
 
